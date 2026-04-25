@@ -1,0 +1,9 @@
+interface:
+  display_name: "Transcribe Kindle Highlights"
+  short_description: "Transcribe Kindle highlights to Docs or Markdown"
+  default_prompt: "Use $transcribe-kindle-highlights to transcribe visible Kindle highlights into my target Google Doc or Markdown folder."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "computer-use"
+      description: "Required to inspect and control Kindle for Mac and Google Docs in a browser."
