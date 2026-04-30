@@ -1,0 +1,7 @@
+interface:
+  display_name: "Sync Main"
+  short_description: "Commit staged work, rebase, repair, and push main"
+  default_prompt: "Use $sync-main to stage the obvious task files on main, commit them, rebase onto origin/main, self-resolve safe conflicts once, validate, and push."
+
+policy:
+  allow_implicit_invocation: false

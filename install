@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+skills_root="$repo_root/skills"
+dest_root="${CODEX_SKILLS_DIR:-$HOME/.codex/skills}"
+mode="link"
+skills=()
+
+usage() {
+  cat <<EOF
+Usage:
+  ./install [--copy] [skill...]
+  ./install --list
+
+Installs all skills by default. Set CODEX_SKILLS_DIR to override $HOME/.codex/skills.
+
+Options:
+  --copy     Copy skills instead of symlinking them.
+  --link     Symlink skills. This is the default.
+  --list     List available skills.
+  -h, --help Show this help.
+EOF
+}
+
+available_skills() {
+  local skill
+  for skill in "$skills_root"/*; do
+    [[ -f "$skill/SKILL.md" ]] || continue
+    basename "$skill"
+  done | sort
+}
+
+validate_skill_name() {
+  local skill_name="$1"
+
+  if [[ -z "$skill_name" || "$skill_name" == .* || "$skill_name" == */* ]]; then
+    printf 'Invalid skill name: %s\n' "$skill_name" >&2
+    exit 1
+  fi
+}
+
+validate_requested_skill() {
+  local skill_name="$1"
+  local source="$skills_root/$skill_name"
+
+  validate_skill_name "$skill_name"
+
+  if [[ ! -f "$source/SKILL.md" ]]; then
+    printf 'Unknown skill: %s\n\nAvailable skills:\n' "$skill_name" >&2
+    available_skills >&2
+    exit 1
+  fi
+}
+
+ensure_install_target_safe() {
+  local skill_name="$1"
+  local source="$skills_root/$skill_name"
+  local target="$dest_root/$skill_name"
+
+  if [[ "$target" == "$source" ]]; then
+    printf 'Refusing to install %s over its source directory: %s\n' "$skill_name" "$source" >&2
+    printf 'Set CODEX_SKILLS_DIR to a separate install directory.\n' >&2
+    exit 1
+  fi
+}
+
+install_skill() {
+  local skill_name="$1"
+  local source="$skills_root/$skill_name"
+  local target="$dest_root/$skill_name"
+
+  rm -rf -- "$target"
+
+  if [[ "$mode" == "copy" ]]; then
+    mkdir -p -- "$target"
+    rsync -a --delete "$source/" "$target/"
+    printf 'Copied %s -> %s\n' "$skill_name" "$target"
+  else
+    ln -s "$source" "$target"
+    printf 'Linked %s -> %s\n' "$skill_name" "$target"
+  fi
+}
+
+while (($#)); do
+  case "$1" in
+    --copy)
+      mode="copy"
+      ;;
+    --link)
+      mode="link"
+      ;;
+    --list)
+      available_skills
+      exit 0
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      while (($#)); do
+        skills+=("$1")
+        shift
+      done
+      break
+      ;;
+    -*)
+      printf 'Unknown option: %s\n\n' "$1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      skills+=("$1")
+      ;;
+  esac
+  shift
+done
+
+if [[ ! -d "$skills_root" ]]; then
+  printf 'Could not find skills directory: %s\n' "$skills_root" >&2
+  exit 1
+fi
+
+if [[ ${#skills[@]} -eq 0 ]]; then
+  while IFS= read -r skill_name; do
+    skills+=("$skill_name")
+  done < <(available_skills)
+fi
+
+if [[ ${#skills[@]} -eq 0 ]]; then
+  printf 'No skills found in %s\n' "$skills_root" >&2
+  exit 1
+fi
+
+for skill_name in "${skills[@]}"; do
+  validate_requested_skill "$skill_name"
+done
+
+mkdir -p -- "$dest_root"
+dest_root="$(cd -- "$dest_root" && pwd -P)"
+
+for skill_name in "${skills[@]}"; do
+  ensure_install_target_safe "$skill_name"
+done
+
+for skill_name in "${skills[@]}"; do
+  install_skill "$skill_name"
+done
+
+printf '\nRestart Codex so the skill list refreshes.\n'
