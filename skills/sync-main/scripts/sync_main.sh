@@ -38,11 +38,80 @@ print_conflicts() {
   fi
 }
 
-require_main_target_context() {
+current_branch() {
+  git branch --show-current
+}
+
+fetch_origin_main() {
+  git fetch origin main:refs/remotes/origin/main
+}
+
+ensure_origin_main_exists() {
+  if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+    printf 'Could not find origin/main after fetching.\n' >&2
+    exit 1
+  fi
+}
+
+ensure_non_main_source_is_clean_base() {
   local branch
-  branch="$(git branch --show-current)"
-  if [[ -n "$branch" && "$branch" != "main" ]]; then
-    printf 'Refusing to run on branch "%s". Use main or detached HEAD only.\n' "$branch" >&2
+  branch="$(current_branch)"
+
+  if [[ "$branch" == "main" ]]; then
+    return 0
+  fi
+
+  ensure_origin_main_exists
+
+  if git merge-base --is-ancestor HEAD origin/main; then
+    return 0
+  fi
+
+  if [[ -n "$branch" ]]; then
+    printf 'Refusing to start from branch "%s" because it already has commits not on origin/main.\n' "$branch" >&2
+  else
+    printf 'Refusing to start from detached HEAD because it already has commits not on origin/main.\n' >&2
+  fi
+
+  if [[ -n "$(git log --oneline --decorate origin/main..HEAD)" ]]; then
+    printf 'Commits ahead of origin/main:\n' >&2
+    git log --oneline --decorate --max-count=10 origin/main..HEAD >&2
+  fi
+
+  printf 'Start from main, or from a task branch whose HEAD is still reachable from origin/main.\n' >&2
+  exit 1
+}
+
+ensure_non_main_push_scope() {
+  local ahead_count branch
+  branch="$(current_branch)"
+
+  if [[ "$branch" == "main" ]]; then
+    return 0
+  fi
+
+  ensure_origin_main_exists
+
+  if ! git merge-base --is-ancestor origin/main HEAD; then
+    printf 'Cannot push from this non-main source because HEAD is not based on origin/main.\n' >&2
+    printf 'Run "%s start" or "%s continue" to rebase before pushing.\n' "$script_name" "$script_name" >&2
+    exit 1
+  fi
+
+  ahead_count="$(git rev-list --count origin/main..HEAD)"
+  if [[ "$ahead_count" != "1" ]]; then
+    if [[ -n "$branch" ]]; then
+      printf 'Refusing to push branch "%s" to main because it is %s commits ahead of origin/main.\n' "$branch" "$ahead_count" >&2
+    else
+      printf 'Refusing to push detached HEAD to main because it is %s commits ahead of origin/main.\n' "$ahead_count" >&2
+    fi
+
+    if [[ "$ahead_count" != "0" ]]; then
+      printf 'Commits ahead of origin/main:\n' >&2
+      git log --oneline --decorate --max-count=10 origin/main..HEAD >&2
+    fi
+
+    printf 'Non-main sync sources must contain exactly the single sync commit before pushing.\n' >&2
     exit 1
   fi
 }
@@ -194,7 +263,6 @@ start_rebase() {
     exit 1
   fi
 
-  require_main_target_context
   ensure_no_other_git_operation
 
   if rebase_in_progress; then
@@ -207,8 +275,9 @@ start_rebase() {
     exit 1
   fi
 
+  fetch_origin_main
+  ensure_non_main_source_is_clean_base
   git commit -m "$message"
-  git fetch origin main
   preserve_unrelated_changes
 
   if git rebase origin/main; then
@@ -223,7 +292,6 @@ start_rebase() {
 }
 
 continue_rebase() {
-  require_main_target_context
   ensure_no_other_git_operation
 
   if ! rebase_in_progress; then
@@ -249,8 +317,7 @@ continue_rebase() {
 push_main() {
   local branch
 
-  require_main_target_context
-  branch="$(git branch --show-current)"
+  branch="$(current_branch)"
 
   if rebase_in_progress; then
     printf 'Cannot push while a rebase is still in progress.\n' >&2
@@ -259,6 +326,8 @@ push_main() {
 
   ensure_no_other_git_operation
   ensure_no_pending_preserved_changes
+  fetch_origin_main
+  ensure_non_main_push_scope
 
   if [[ "$branch" == "main" ]]; then
     git push origin main

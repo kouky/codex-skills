@@ -19,7 +19,7 @@ Safely move `main` forward by:
 
 ## Guardrails
 
-- Target `origin/main`. A checked-out local `main` branch is fine, and detached `HEAD` is also acceptable in Codex worktrees. Stop if the current named branch is anything other than `main`.
+- Target `origin/main`. A checked-out local `main`, detached `HEAD`, or named task branch is acceptable. When not on `main`, the helper must fetch `origin/main` and stop unless the current `HEAD` is already reachable from `origin/main` before creating the sync commit; this prevents pushing pre-existing branch-only commits to `main`.
 - Never force-push.
 - Never use `git pull`; use fetch plus rebase.
 - Never discard user changes with `reset`, `checkout --`, `restore --source`, `clean`, or blanket `ours`/`theirs` conflict strategies.
@@ -36,7 +36,7 @@ Safely move `main` forward by:
 - Check `git status --short --branch`.
 - If a rebase is already in progress, switch to the continuation flow instead of creating a new commit.
 - If a merge, cherry-pick, revert, or other git sequencer operation is already in progress, stop and explain.
-- If the current named branch is neither `main` nor detached `HEAD`, stop and explain.
+- If the current context is not `main`, continue only when the helper verifies that `HEAD` has no commits ahead of `origin/main` before the sync commit.
 
 ### Staging policy
 
@@ -66,10 +66,11 @@ For a fresh run, use the helper script:
 ```
 
 The script:
-- verifies branch and staged state,
+- verifies source context and staged state,
 - refuses to run while another git sequencer operation is already active,
+- fetches `origin/main` before committing,
+- refuses non-`main` sources that already contain commits not reachable from `origin/main`,
 - commits the staged snapshot only,
-- runs `git fetch origin main`,
 - preserves unrelated tracked and untracked changes in a dedicated stash,
 - runs `git rebase origin/main`,
 - restores the preserved changes after the rebase,
@@ -112,6 +113,8 @@ Once the rebase completes:
 ```
 
 Do not push until any preserved unrelated changes have been restored cleanly or their pending restore state has been resolved explicitly.
+
+When pushing from a detached `HEAD` or named task branch, the helper refuses unless `HEAD` is exactly one commit ahead of the freshly fetched `origin/main`. This keeps the final `HEAD:refs/heads/main` push scoped to the sync commit.
 
 In the final report:
 - say whether preserved unrelated changes were restored cleanly or needed manual conflict resolution,
