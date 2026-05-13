@@ -6,6 +6,7 @@ Personal Codex skills packaged for local installation and GitHub publishing.
 
 | Skill | Description |
 | --- | --- |
+| `delete-old-x-posts` | Delete older X.com/Twitter posts, replies, quote posts, and reposts through the logged-in Chrome UI, one action at a time, with a hard 500-action batch limit. |
 | `sync-main` | Safely move `main` forward after explicit `$sync-main` invocation by committing the active task snapshot, preserving unrelated edits, rebasing onto `origin/main`, resolving one clearly-fixable conflict set, validating, and pushing without force. |
 | `transcribe-kindle-highlights` | Transcribe user-selected Kindle highlights into Google Docs or Markdown by reading visible Kindle for Mac pages or annotations, without using Kindle copy/export, local databases, or DRM workarounds. |
 

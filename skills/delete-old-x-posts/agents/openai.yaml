@@ -1,0 +1,10 @@
+interface:
+  display_name: "Delete Old X Posts"
+  short_description: "Delete old X activity through Chrome"
+  default_prompt: "Use $delete-old-x-posts to delete my old X.com posts, replies, quote posts, and reposts older than a specified number of months, up to 500 actions at a time."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "node_repl"
+      description: "Required by the OpenAI Chrome plugin to control the user's logged-in Chrome session."
